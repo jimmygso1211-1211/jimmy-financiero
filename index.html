@@ -134,7 +134,7 @@
   .field input:focus, .field select:focus{border-color:var(--accent);}
   .field-hint{font-size:11px;color:var(--muted);margin-top:5px;}
 
-  .cat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+  .cat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
   .cat-option{background:var(--card2);border:2px solid var(--border);border-radius:14px;padding:12px 4px;text-align:center;cursor:pointer;}
   .cat-option.selected{border-color:var(--accent);background:rgba(61,220,151,0.12);}
   .cat-option .emoji{font-size:22px;display:block;margin-bottom:4px;}
@@ -373,6 +373,7 @@ const EXPENSE_CATEGORIES = [
   {id:'transporte', name:'Transporte', emoji:'🚗', color:'#54a0ff'},
   {id:'personales', name:'Personales', emoji:'🧴', color:'#ee5a24'},
   {id:'casa', name:'Casa', emoji:'🏠', color:'#5f27cd'},
+  {id:'otros', name:'Otros', emoji:'📦', color:'#8a8f9b'},
 ];
 
 const INCOME_CATEGORIES = [

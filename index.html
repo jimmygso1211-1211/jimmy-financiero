@@ -411,15 +411,25 @@ function escapeHtml(str){
   return div.innerHTML;
 }
 
-async function loadAll(){
+function loadAll(){
   try{
-    const result = await window.storage.get('finance-data', false);
-    if(result){
-      const data = JSON.parse(result.value);
+    const raw = localStorage.getItem('finance-data');
+    if(raw){
+      const data = JSON.parse(raw);
       transactions = data.transactions || [];
       settings = data.settings || settings;
+      // Migrar categorías antiguas a las nuevas
+      let changed = false;
+      transactions = transactions.map(t => {
+        if(t.type === 'gasto' && (t.category === 'otros' || t.category === 'otros_gasto')){
+          changed = true;
+          return {...t, category: 'personales'};
+        }
+        return t;
+      });
+      if(changed) saveAll();
     }else{
-      transactions = await tryLoadLegacy();
+      transactions = tryLoadLegacy();
     }
   }catch(e){
     transactions = [];
@@ -430,11 +440,11 @@ async function loadAll(){
   render();
 }
 
-async function tryLoadLegacy(){
+function tryLoadLegacy(){
   try{
-    const legacy = await window.storage.get('expenses-list', false);
+    const legacy = localStorage.getItem('expenses-list');
     if(legacy){
-      const oldExpenses = JSON.parse(legacy.value);
+      const oldExpenses = JSON.parse(legacy);
       return oldExpenses.map(e => ({
         id: e.id,
         type: 'gasto',
@@ -448,9 +458,9 @@ async function tryLoadLegacy(){
   return [];
 }
 
-async function saveAll(){
+function saveAll(){
   try{
-    await window.storage.set('finance-data', JSON.stringify({transactions, settings}), false);
+    localStorage.setItem('finance-data', JSON.stringify({transactions, settings}));
   }catch(e){
     console.error('Error guardando', e);
     showToast('⚠️ No se pudo guardar');

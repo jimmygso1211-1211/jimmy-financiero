@@ -179,7 +179,48 @@
 
   .quick-balance-banner{background:var(--green-dim);border:1px solid var(--accent-dim);border-radius:14px;padding:14px 16px;margin-bottom:16px;font-size:12.5px;color:#cdf5e3;display:flex;gap:10px;align-items:flex-start;}
   .quick-balance-banner button{background:var(--accent);color:#0b0d11;border:none;border-radius:10px;padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0;}
-  .daily-grid{
+  .daily-date-row{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:14px;
+  }
+  .daily-date-row input[type=date]{
+    flex:1;
+    background:var(--card);
+    border:1px solid var(--border);
+    color:var(--text);
+    padding:10px 14px;
+    border-radius:12px;
+    font-size:14px;
+    font-weight:600;
+    outline:none;
+    text-align:center;
+  }
+  .daily-date-row input[type=date]:focus{border-color:var(--accent);}
+  .daily-nav-btn{
+    background:var(--card);
+    border:1px solid var(--border);
+    color:var(--text);
+    width:40px;height:40px;
+    border-radius:12px;
+    font-size:22px;
+    display:flex;align-items:center;justify-content:center;
+    cursor:pointer;
+    flex-shrink:0;
+  }
+  .daily-nav-btn:active{background:var(--card2);}
+  .daily-empty{
+    text-align:center;
+    padding:20px;
+    color:var(--muted);
+    font-size:13px;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:14px;
+    margin-bottom:18px;
+  }
+
     display:grid;
     grid-template-columns:repeat(2,1fr);
     gap:10px;
@@ -274,7 +315,12 @@
 
   <div id="view-lista">
     <button class="export-btn" id="exportBtn">📤 Exportar a Excel</button>
-    <div class="section-title">Gastos de hoy por categoría</div>
+    <div class="section-title">Gastos por día y categoría</div>
+    <div class="daily-date-row">
+      <button class="daily-nav-btn" id="dailyPrevBtn">‹</button>
+      <input type="date" id="dailyDatePicker">
+      <button class="daily-nav-btn" id="dailyNextBtn">›</button>
+    </div>
     <div id="dailyCategoryStats"></div>
     <div class="filters" id="filterChips"></div>
     <div id="txList"></div>
@@ -575,17 +621,27 @@ function matchesFilter(t){
   return t.category === activeFilter;
 }
 
+let selectedDailyDate = todayStr();
+
 function renderDailyCategoryStats(){
-  const todayS = todayStr();
-  const todayTxs = transactions.filter(t => t.type === 'gasto' && t.date === todayS);
+  const dateStr = selectedDailyDate;
+  const dayTxs = transactions.filter(t => t.type === 'gasto' && t.date === dateStr);
 
   const byCat = {};
   EXPENSE_CATEGORIES.forEach(c => byCat[c.id] = 0);
-  todayTxs.forEach(t => { byCat[t.category] = (byCat[t.category] || 0) + t.amount; });
+  dayTxs.forEach(t => { byCat[t.category] = (byCat[t.category] || 0) + t.amount; });
 
-  const totalHoy = Object.values(byCat).reduce((s, v) => s + v, 0);
+  const totalDia = Object.values(byCat).reduce((s, v) => s + v, 0);
 
   const wrap = document.getElementById('dailyCategoryStats');
+
+  if(totalDia === 0){
+    wrap.innerHTML = `
+      <div class="daily-empty">Sin gastos registrados para este día.</div>
+    `;
+    return;
+  }
+
   wrap.innerHTML = `
     <div class="daily-grid">
       ${EXPENSE_CATEGORIES.map(c => {
@@ -595,15 +651,15 @@ function renderDailyCategoryStats(){
             <div class="dc-icon" style="background:${c.color}22;">${c.emoji}</div>
             <div class="dc-info">
               <div class="dc-name">${c.name}</div>
-              <div class="dc-amt ${amt === 0 ? 'zero' : ''}">${amt === 0 ? 'S/ 0.00' : formatMoney(amt)}</div>
+              <div class="dc-amt ${amt === 0 ? 'zero' : ''}">${formatMoney(amt)}</div>
             </div>
           </div>
         `;
       }).join('')}
     </div>
     <div class="daily-total-row">
-      <span class="dtl">📊 Total gastado hoy</span>
-      <span class="dtv">${formatMoney(totalHoy)}</span>
+      <span class="dtl">📊 Total del día</span>
+      <span class="dtv">${formatMoney(totalDia)}</span>
     </div>
   `;
 }
@@ -913,6 +969,29 @@ document.getElementById('settingsSaveBtn').addEventListener('click', async ()=>{
 document.getElementById('exportBtn').addEventListener('click', exportToExcel);
 
 document.getElementById('dateToday').textContent = new Date().toLocaleDateString('es-PE', {weekday:'long', day:'numeric', month:'long'});
+
+// Inicializar picker de fecha diaria
+const dailyPicker = document.getElementById('dailyDatePicker');
+dailyPicker.value = todayStr();
+dailyPicker.addEventListener('change', ()=>{
+  selectedDailyDate = dailyPicker.value;
+  renderDailyCategoryStats();
+});
+document.getElementById('dailyPrevBtn').addEventListener('click', ()=>{
+  const d = new Date(selectedDailyDate + 'T00:00:00');
+  d.setDate(d.getDate() - 1);
+  selectedDailyDate = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  dailyPicker.value = selectedDailyDate;
+  renderDailyCategoryStats();
+});
+document.getElementById('dailyNextBtn').addEventListener('click', ()=>{
+  const d = new Date(selectedDailyDate + 'T00:00:00');
+  d.setDate(d.getDate() + 1);
+  selectedDailyDate = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  dailyPicker.value = selectedDailyDate;
+  renderDailyCategoryStats();
+});
+
 loadAll();
 
 // Forzar actualización automática: desregistrar SW viejo y recargar

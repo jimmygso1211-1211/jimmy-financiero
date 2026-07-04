@@ -904,9 +904,10 @@ document.getElementById('exportBtn').addEventListener('click', exportToExcel);
 document.getElementById('dateToday').textContent = new Date().toLocaleDateString('es-PE', {weekday:'long', day:'numeric', month:'long'});
 loadAll();
 
+// Forzar actualización automática: desregistrar SW viejo y recargar
 if('serviceWorker' in navigator){
-  window.addEventListener('load', ()=>{
-    navigator.serviceWorker.register('service-worker.js').catch(e=>console.log('SW error', e));
+  navigator.serviceWorker.getRegistrations().then(regs => {
+    regs.forEach(reg => reg.unregister());
   });
 }
 

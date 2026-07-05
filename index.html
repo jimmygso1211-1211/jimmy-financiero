@@ -483,9 +483,9 @@ function loadAll(){
       // Migrar categorías antiguas a las nuevas
       let changed = false;
       transactions = transactions.map(t => {
-        if(t.type === 'gasto' && (t.category === 'otros' || t.category === 'otros_gasto')){
+        if(t.type === 'gasto' && t.category === 'otros_gasto'){
           changed = true;
-          return {...t, category: 'personales'};
+          return {...t, category: 'otros'};
         }
         return t;
       });
@@ -512,7 +512,7 @@ function tryLoadLegacy(){
         type: 'gasto',
         amount: e.amount,
         desc: e.desc,
-        category: (e.category === 'otros' || e.category === 'otros_gasto') ? 'personales' : e.category,
+        category: e.category === 'otros_gasto' ? 'otros' : e.category,
         date: e.date,
       }));
     }

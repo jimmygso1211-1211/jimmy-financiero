@@ -326,6 +326,14 @@
   </div>
 
   <div id="view-resumen" style="display:none;">
+    <div class="section-title">Gastos por categoría y mes</div>
+    <div class="daily-date-row">
+      <button class="daily-nav-btn" id="monthPrevBtn">‹</button>
+      <input type="month" id="monthPicker" style="flex:1;background:var(--card);border:1px solid var(--accent);color:var(--text);padding:10px 14px;border-radius:12px;font-size:14px;font-weight:600;outline:none;text-align:center;">
+      <button class="daily-nav-btn" id="monthNextBtn">›</button>
+    </div>
+    <div id="monthlyCategoryStats"></div>
+
     <div class="section-title">Balance del mes</div>
     <div class="net-row">
       <span class="net-label">📈 Ingresos</span>
@@ -339,9 +347,6 @@
       <span class="net-label">⚖️ Resultado neto</span>
       <span class="net-val" id="resNet">S/ 0.00</span>
     </div>
-
-    <div class="section-title">Gastos por categoría</div>
-    <div id="categoryStats"></div>
 
     <div class="section-title">Ingresos por fuente</div>
     <div id="incomeStats"></div>
@@ -362,6 +367,17 @@
 <div class="fab-wrap">
   <button class="fab fab-income" id="addIncomeBtn">＋ Ingreso</button>
   <button class="fab fab-expense" id="addExpenseBtn">＋ Gasto</button>
+</div>
+
+<!-- Modal detalle gastos por categoría del día -->
+<div class="modal-overlay" id="detailOverlay">
+  <div class="modal">
+    <h2 id="detailTitle">Detalle</h2>
+    <div id="detailList"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="detailCloseBtn">Cerrar</button>
+    </div>
+  </div>
 </div>
 
 <div class="modal-overlay" id="modalOverlay">
@@ -621,6 +637,7 @@ function matchesFilter(t){
 }
 
 let selectedDailyDate = todayStr();
+let selectedMonth = todayStr().slice(0,7);
 
 function renderDailyCategoryStats(){
   const dateStr = selectedDailyDate;
@@ -628,16 +645,13 @@ function renderDailyCategoryStats(){
 
   const byCat = {};
   EXPENSE_CATEGORIES.forEach(c => byCat[c.id] = 0);
-  dayTxs.forEach(t => { byCat[t.category] = (byCat[t.category] || 0) + t.amount; });
+  dayTxs.forEach(t => { byCat[t.category] = (byCat[t.category]||0) + t.amount; });
 
-  const totalDia = Object.values(byCat).reduce((s, v) => s + v, 0);
-
+  const totalDia = Object.values(byCat).reduce((s,v) => s+v, 0);
   const wrap = document.getElementById('dailyCategoryStats');
 
   if(totalDia === 0){
-    wrap.innerHTML = `
-      <div class="daily-empty">Sin gastos registrados para este día.</div>
-    `;
+    wrap.innerHTML = `<div class="daily-empty">Sin gastos registrados para este día.</div>`;
     return;
   }
 
@@ -646,22 +660,122 @@ function renderDailyCategoryStats(){
       ${EXPENSE_CATEGORIES.map(c => {
         const amt = byCat[c.id] || 0;
         return `
-          <div class="daily-card">
+          <div class="daily-card" data-cat="${c.id}" style="cursor:pointer;">
             <div class="dc-icon" style="background:${c.color}22;">${c.emoji}</div>
             <div class="dc-info">
               <div class="dc-name">${c.name}</div>
-              <div class="dc-amt ${amt === 0 ? 'zero' : ''}">${formatMoney(amt)}</div>
+              <div class="dc-amt ${amt===0?'zero':''}">${formatMoney(amt)}</div>
             </div>
-          </div>
-        `;
+            ${amt > 0 ? '<div style="color:var(--muted);font-size:16px;">›</div>' : ''}
+          </div>`;
       }).join('')}
     </div>
     <div class="daily-total-row">
       <span class="dtl">📊 Total del día</span>
       <span class="dtv">${formatMoney(totalDia)}</span>
-    </div>
-  `;
+    </div>`;
+
+  wrap.querySelectorAll('.daily-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const catId = card.dataset.cat;
+      const cat = EXPENSE_CATEGORIES.find(c => c.id === catId);
+      const catTxs = dayTxs.filter(t => t.category === catId);
+      if(catTxs.length === 0) return;
+      openDetailModal(cat, catTxs, dateStr);
+    });
+  });
 }
+
+function renderMonthlyCategoryStats(){
+  const monthKey = selectedMonth;
+  const monthTxs = transactions.filter(t => t.type === 'gasto' && t.date.slice(0,7) === monthKey);
+
+  const byCat = {};
+  EXPENSE_CATEGORIES.forEach(c => byCat[c.id] = 0);
+  monthTxs.forEach(t => { byCat[t.category] = (byCat[t.category]||0) + t.amount; });
+
+  const totalMes = Object.values(byCat).reduce((s,v) => s+v, 0);
+  const wrap = document.getElementById('monthlyCategoryStats');
+
+  if(totalMes === 0){
+    wrap.innerHTML = `<div class="daily-empty">Sin gastos en este mes.</div>`;
+    return;
+  }
+
+  wrap.innerHTML = `
+    <div class="daily-grid">
+      ${EXPENSE_CATEGORIES.map(c => {
+        const amt = byCat[c.id] || 0;
+        const pct = totalMes > 0 ? Math.round((amt/totalMes)*100) : 0;
+        return `
+          <div class="daily-card" data-cat="${c.id}" data-month="${monthKey}" style="cursor:pointer;">
+            <div class="dc-icon" style="background:${c.color}22;">${c.emoji}</div>
+            <div class="dc-info">
+              <div class="dc-name">${c.name}</div>
+              <div class="dc-amt ${amt===0?'zero':''}">${formatMoney(amt)}</div>
+              ${amt > 0 ? `<div style="font-size:10px;color:${c.color};">${pct}% del mes</div>` : ''}
+            </div>
+            ${amt > 0 ? '<div style="color:var(--muted);font-size:16px;">›</div>' : ''}
+          </div>`;
+      }).join('')}
+    </div>
+    <div class="daily-total-row">
+      <span class="dtl">📊 Total del mes</span>
+      <span class="dtv">${formatMoney(totalMes)}</span>
+    </div>`;
+
+  wrap.querySelectorAll('.daily-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const catId = card.dataset.cat;
+      const cat = EXPENSE_CATEGORIES.find(c => c.id === catId);
+      const catTxs = transactions.filter(t => t.type==='gasto' && t.category===catId && t.date.slice(0,7)===monthKey);
+      if(catTxs.length === 0) return;
+      openDetailModal(cat, catTxs, monthKey, true);
+    });
+  });
+}
+
+function openDetailModal(cat, txs, period, isMonth=false){
+  const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const total = txs.reduce((s,t) => s+t.amount, 0);
+  const sorted = [...txs].sort((a,b) => b.date.localeCompare(a.date));
+
+  let periodLabel;
+  if(isMonth){
+    const [y,m] = period.split('-');
+    periodLabel = `${meses[parseInt(m)-1]} ${y}`;
+  } else {
+    periodLabel = formatDateDisplay(period);
+  }
+
+  document.getElementById('detailTitle').innerHTML = `
+    <span style="margin-right:8px;">${cat.emoji}</span>${cat.name} · ${periodLabel}`;
+
+  document.getElementById('detailList').innerHTML = `
+    ${sorted.map(t => `
+      <div class="tx-item">
+        <div class="tx-icon" style="background:${cat.color}22;">${cat.emoji}</div>
+        <div class="tx-info">
+          <div class="tx-name">${escapeHtml(t.desc || cat.name)}</div>
+          <div class="tx-meta">${formatDateDisplay(t.date)}</div>
+        </div>
+        <div class="tx-amount expense">− ${formatMoney(t.amount)}</div>
+      </div>`).join('')}
+    <div class="daily-total-row" style="margin-top:12px;">
+      <span class="dtl">Total ${cat.name}</span>
+      <span class="dtv">${formatMoney(total)}</span>
+    </div>`;
+
+  document.getElementById('detailOverlay').classList.add('show');
+}
+
+document.getElementById('detailCloseBtn').addEventListener('click', ()=>{
+  document.getElementById('detailOverlay').classList.remove('show');
+});
+document.getElementById('detailOverlay').addEventListener('click', (e)=>{
+  if(e.target === document.getElementById('detailOverlay'))
+    document.getElementById('detailOverlay').classList.remove('show');
+});
 
 function renderList(){
   const list = document.getElementById('txList');
@@ -706,47 +820,30 @@ function renderList(){
 }
 
 function renderResumen(){
-  const s = getStats();
-  document.getElementById('resIncome').textContent = formatMoney(s.monthIncome);
-  document.getElementById('resExpense').textContent = formatMoney(s.monthExpense);
-  const net = s.monthIncome - s.monthExpense;
+  const monthKey = selectedMonth;
+  const monthTxs = transactions.filter(t => t.date.slice(0,7) === monthKey);
+  const monthIncome = monthTxs.filter(t=>t.type==='ingreso').reduce((s,t)=>s+t.amount,0);
+  const monthExpense = monthTxs.filter(t=>t.type==='gasto').reduce((s,t)=>s+t.amount,0);
+  const monthIncomes = monthTxs.filter(t=>t.type==='ingreso');
+
+  document.getElementById('resIncome').textContent = formatMoney(monthIncome);
+  document.getElementById('resExpense').textContent = formatMoney(monthExpense);
+  const net = monthIncome - monthExpense;
   const netEl = document.getElementById('resNet');
   netEl.textContent = formatMoney(net);
   netEl.classList.toggle('positive', net >= 0);
   netEl.classList.toggle('negative', net < 0);
 
-  const wrapE = document.getElementById('categoryStats');
-  const totalE = s.monthExpense || 1;
-  const byCat = {};
-  EXPENSE_CATEGORIES.forEach(c=> byCat[c.id] = 0);
-  s.monthExpenses.forEach(e=>{ byCat[e.category] = (byCat[e.category]||0) + e.amount; });
-  const sortedE = EXPENSE_CATEGORIES.map(c=>({...c, total: byCat[c.id]||0})).sort((a,b)=>b.total-a.total);
-
-  if(s.monthExpense === 0){
-    wrapE.innerHTML = `<div class="empty-state"><div class="emoji">📊</div><p>Sin gastos este mes todavía.</p></div>`;
-  }else{
-    wrapE.innerHTML = sortedE.map(c=>{
-      const pct = Math.round((c.total/totalE)*100);
-      return `
-        <div class="stat-bar-row">
-          <div class="stat-bar-top">
-            <span class="name">${c.emoji} ${c.name}</span>
-            <span class="amt">${formatMoney(c.total)} · ${pct}%</span>
-          </div>
-          <div class="stat-bar-bg"><div class="stat-bar-fill" style="width:${pct}%;background:${c.color};"></div></div>
-        </div>
-      `;
-    }).join('');
-  }
+  renderMonthlyCategoryStats();
 
   const wrapI = document.getElementById('incomeStats');
-  const totalI = s.monthIncome || 1;
+  const totalI = monthIncome || 1;
   const byCatI = {};
   INCOME_CATEGORIES.forEach(c=> byCatI[c.id] = 0);
-  s.monthIncomes.forEach(e=>{ byCatI[e.category] = (byCatI[e.category]||0) + e.amount; });
+  monthIncomes.forEach(e=>{ byCatI[e.category] = (byCatI[e.category]||0) + e.amount; });
   const sortedI = INCOME_CATEGORIES.map(c=>({...c, total: byCatI[c.id]||0})).sort((a,b)=>b.total-a.total);
 
-  if(s.monthIncome === 0){
+  if(monthIncome === 0){
     wrapI.innerHTML = `<div class="empty-state"><div class="emoji">💼</div><p>Sin ingresos este mes todavía.</p></div>`;
   }else{
     wrapI.innerHTML = sortedI.map(c=>{
@@ -758,8 +855,7 @@ function renderResumen(){
             <span class="amt">${formatMoney(c.total)} · ${pct}%</span>
           </div>
           <div class="stat-bar-bg"><div class="stat-bar-fill" style="width:${pct}%;background:${c.color};"></div></div>
-        </div>
-      `;
+        </div>`;
     }).join('');
   }
 }
@@ -989,6 +1085,28 @@ document.getElementById('dailyNextBtn').addEventListener('click', ()=>{
   selectedDailyDate = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
   dailyPicker.value = selectedDailyDate;
   renderDailyCategoryStats();
+});
+
+// Selector de mes en Resumen
+const monthPicker = document.getElementById('monthPicker');
+monthPicker.value = selectedMonth;
+monthPicker.addEventListener('change', ()=>{
+  selectedMonth = monthPicker.value;
+  renderResumen();
+});
+document.getElementById('monthPrevBtn').addEventListener('click', ()=>{
+  const [y,m] = selectedMonth.split('-').map(Number);
+  const d = new Date(y, m-2, 1);
+  selectedMonth = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  monthPicker.value = selectedMonth;
+  renderResumen();
+});
+document.getElementById('monthNextBtn').addEventListener('click', ()=>{
+  const [y,m] = selectedMonth.split('-').map(Number);
+  const d = new Date(y, m, 1);
+  selectedMonth = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  monthPicker.value = selectedMonth;
+  renderResumen();
 });
 
 loadAll();
